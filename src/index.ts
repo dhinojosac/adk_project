@@ -1,6 +1,6 @@
 import { Runner, InMemorySessionService, getFunctionCalls, stringifyContent } from '@google/adk';
 import * as readline from 'readline/promises';
-import { weatherAgent } from './agents/weatherBot';
+import { coordinator } from './agents/realEstate/coordinator';
 import dotenv from 'dotenv';
 dotenv.config();
 
@@ -14,8 +14,8 @@ async function main() {
   const sessionService = new InMemorySessionService();
   
   const runner = new Runner({
-    appName: 'WeatherAgentTeam',
-    agent: weatherAgent,
+    appName: 'RealEstateEvaluator',
+    agent: coordinator,
     sessionService
   });
 
@@ -24,24 +24,24 @@ async function main() {
     output: process.stdout
   });
 
-  console.log("------------------------------------------------------------------");
-  console.log("🌦️  Agent Team en línea (WeatherBot + GreetingBot)");
-  console.log("Escribe 'salir' para terminar.");
-  console.log("------------------------------------------------------------------");
+  console.log("══════════════════════════════════════════════════════════════");
+  console.log("🏠  Evaluador Inmobiliario — Equipo de Agentes ADK");
+  console.log("   Analistas: Mercado | Plusvalía | Financiero | Barrio");
+  console.log("══════════════════════════════════════════════════════════════");
+  console.log("Escribe 'salir' para terminar.\n");
   
   const sessionId = 'session-' + Date.now();
   const userId = 'user-1';
 
-  // Crear la sesión antes de usarla
   await sessionService.createSession({
-    appName: 'WeatherAgentTeam',
+    appName: 'RealEstateEvaluator',
     userId,
     sessionId,
     state: {}
   });
 
   while (true) {
-    const input = await rl.question('\nTú: ');
+    const input = await rl.question('Tú: ');
     if (input.toLowerCase() === 'salir') break;
 
     const responseStream = runner.runAsync({
@@ -50,20 +50,27 @@ async function main() {
       newMessage: { role: 'user', parts: [{ text: input }] }
     });
 
-    process.stdout.write('Team: ');
+    process.stdout.write('\n🏠 Asesor: ');
     
     for await (const event of responseStream) {
       const functionCalls = getFunctionCalls(event);
       if (functionCalls && functionCalls.length > 0) {
           functionCalls.forEach(fc => {
-            console.log(`\n  [Llamada a agente/herramienta] -> ${fc.name}`);
+            if (fc.name === 'EvaluationPipeline') {
+              console.log('\n  ⏳ Iniciando análisis con 4 especialistas en paralelo...');
+              console.log('  📊 Mercado | 📈 Plusvalía | 💰 Financiero | 🏘️ Barrio');
+              console.log('  (esto puede tomar 1-2 minutos)\n');
+            } else {
+              console.log(`  [🔧 ${fc.name}]`);
+            }
           });
       }
       const text = stringifyContent(event);
       if (text) {
-         process.stdout.write(text + '\n');
+         process.stdout.write(text);
       }
     }
+    console.log('\n');
   }
   rl.close();
 }
