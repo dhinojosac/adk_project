@@ -5,33 +5,7 @@ import { z } from 'zod';
 // 💰 Herramientas Financieras Inmobiliarias — Chile
 // ═══════════════════════════════════════════════════════════
 
-/**
- * Obtiene el valor UF actual desde la API pública de mindicador.cl
- */
-export const getUfValueTool = new FunctionTool({
-  name: 'get_uf_value',
-  description: 'Obtiene el valor actual de la UF (Unidad de Fomento) en pesos chilenos (CLP). Usar siempre antes de hacer conversiones UF↔CLP.',
-  parameters: z.object({}),
-  execute: async () => {
-    try {
-      const res = await fetch('https://mindicador.cl/api/uf');
-      const data = await res.json();
-      const latest = data.serie[0];
-      return {
-        status: 'success',
-        uf_value_clp: latest.valor,
-        date: latest.fecha,
-        source: 'mindicador.cl'
-      };
-    } catch (error) {
-      return {
-        status: 'error',
-        message: 'No se pudo obtener el valor UF. Usa un valor aproximado de 38.500 CLP.',
-        approximate_value: 38500
-      };
-    }
-  }
-});
+// Removed getUfValueTool
 
 /**
  * Simula un crédito hipotecario chileno
@@ -44,46 +18,58 @@ export const calculateMortgageTool = new FunctionTool({
   Pie mínimo en Chile: 10-20% del valor de la propiedad.`,
   parameters: z.object({
     precio_propiedad_uf: z.number().describe('Precio de la propiedad en UF'),
-    pie_porcentaje: z.number().describe('Porcentaje de pie (ej: 20 para 20%)'),
-    tasa_anual_porcentaje: z.number().describe('Tasa de interés anual (ej: 4.5 para 4.5%)'),
-    plazo_anos: z.number().describe('Plazo del crédito en años (ej: 25)'),
+    escenarios: z.array(z.object({
+      pie_porcentaje: z.number().describe('Porcentaje de pie (ej: 20 para 20%)'),
+      tasa_anual_porcentaje: z.number().describe('Tasa de interés anual (ej: 4.5 para 4.5%)'),
+      plazo_anos: z.number().describe('Plazo del crédito en años (ej: 25)'),
+    })).describe('Lista de escenarios hipotecarios a simular'),
     uf_value_clp: z.number().describe('Valor actual de la UF en CLP').optional(),
   }),
-  execute: async ({ precio_propiedad_uf, pie_porcentaje, tasa_anual_porcentaje, plazo_anos, uf_value_clp }) => {
+  execute: async ({ precio_propiedad_uf, escenarios, uf_value_clp }: any) => {
     const uf = uf_value_clp || 38500;
-    const pie_uf = precio_propiedad_uf * (pie_porcentaje / 100);
-    const monto_credito_uf = precio_propiedad_uf - pie_uf;
     
-    const tasa_mensual = (tasa_anual_porcentaje / 100) / 12;
-    const n_cuotas = plazo_anos * 12;
-    
-    // Fórmula de cuota fija (sistema francés)
-    const dividendo_uf = monto_credito_uf * 
-      (tasa_mensual * Math.pow(1 + tasa_mensual, n_cuotas)) / 
-      (Math.pow(1 + tasa_mensual, n_cuotas) - 1);
-    
-    const total_pagado_uf = dividendo_uf * n_cuotas;
-    const total_intereses_uf = total_pagado_uf - monto_credito_uf;
+    const resultados = escenarios.map((escenario: any) => {
+      const { pie_porcentaje, tasa_anual_porcentaje, plazo_anos } = escenario;
+      const pie_uf = precio_propiedad_uf * (pie_porcentaje / 100);
+      const monto_credito_uf = precio_propiedad_uf - pie_uf;
+      
+      const tasa_mensual = (tasa_anual_porcentaje / 100) / 12;
+      const n_cuotas = plazo_anos * 12;
+      
+      const dividendo_uf = monto_credito_uf * 
+        (tasa_mensual * Math.pow(1 + tasa_mensual, n_cuotas)) / 
+        (Math.pow(1 + tasa_mensual, n_cuotas) - 1);
+      
+      const total_pagado_uf = dividendo_uf * n_cuotas;
+      const total_intereses_uf = total_pagado_uf - monto_credito_uf;
+
+      return {
+        escenario: {
+          pie_porcentaje: `${pie_porcentaje}%`,
+          tasa_anual: `${tasa_anual_porcentaje}%`,
+          plazo: `${plazo_anos} años`,
+        },
+        resumen: {
+          pie_uf: parseFloat(pie_uf.toFixed(1)),
+          monto_credito_uf: parseFloat(monto_credito_uf.toFixed(1)),
+        },
+        dividendo_mensual: {
+          uf: parseFloat(dividendo_uf.toFixed(2)),
+          clp: Math.round(dividendo_uf * uf),
+          clp_formatted: `$${Math.round(dividendo_uf * uf).toLocaleString('es-CL')} CLP`,
+        },
+        totales: {
+          total_pagado_uf: parseFloat(total_pagado_uf.toFixed(1)),
+          total_intereses_uf: parseFloat(total_intereses_uf.toFixed(1)),
+          costo_total_clp: `$${Math.round(total_pagado_uf * uf).toLocaleString('es-CL')} CLP`,
+        }
+      };
+    });
 
     return {
       status: 'success',
-      resumen: {
-        precio_propiedad: `${precio_propiedad_uf} UF ($${Math.round(precio_propiedad_uf * uf).toLocaleString('es-CL')} CLP)`,
-        pie: `${pie_uf.toFixed(1)} UF ($${Math.round(pie_uf * uf).toLocaleString('es-CL')} CLP) — ${pie_porcentaje}%`,
-        monto_credito: `${monto_credito_uf.toFixed(1)} UF`,
-        tasa_anual: `${tasa_anual_porcentaje}%`,
-        plazo: `${plazo_anos} años (${n_cuotas} cuotas)`,
-      },
-      dividendo_mensual: {
-        uf: parseFloat(dividendo_uf.toFixed(2)),
-        clp: Math.round(dividendo_uf * uf),
-        clp_formatted: `$${Math.round(dividendo_uf * uf).toLocaleString('es-CL')} CLP`,
-      },
-      totales: {
-        total_pagado_uf: parseFloat(total_pagado_uf.toFixed(1)),
-        total_intereses_uf: parseFloat(total_intereses_uf.toFixed(1)),
-        costo_total_clp: `$${Math.round(total_pagado_uf * uf).toLocaleString('es-CL')} CLP`,
-      }
+      precio_propiedad: `${precio_propiedad_uf} UF ($${Math.round(precio_propiedad_uf * uf).toLocaleString('es-CL')} CLP)`,
+      resultados_escenarios: resultados
     };
   }
 });
@@ -104,7 +90,7 @@ export const calculateCapRateTool = new FunctionTool({
     vacancia_porcentaje: z.number().describe('Porcentaje estimado de vacancia anual (ej: 5 para 5%). Típico: 5-8%').optional(),
     uf_value_clp: z.number().describe('Valor actual de la UF en CLP').optional(),
   }),
-  execute: async ({ precio_propiedad_uf, arriendo_mensual_clp, gastos_comunes_clp, contribuciones_anuales_clp, vacancia_porcentaje, uf_value_clp }) => {
+  execute: async ({ precio_propiedad_uf, arriendo_mensual_clp, gastos_comunes_clp, contribuciones_anuales_clp, vacancia_porcentaje, uf_value_clp }: any) => {
     const uf = uf_value_clp || 38500;
     const vacancia = (vacancia_porcentaje || 5) / 100;
     const precio_clp = precio_propiedad_uf * uf;
@@ -159,12 +145,13 @@ export const compareRentVsBuyTool = new FunctionTool({
     precio_compra_uf: z.number().describe('Precio de compra en UF'),
     pie_porcentaje: z.number().describe('Porcentaje de pie (ej: 20)'),
     tasa_hipotecaria_anual: z.number().describe('Tasa hipotecaria anual (ej: 4.5)'),
+    plazo_credito_anos: z.number().describe('Plazo del crédito en años (ej: 25)'),
     plusvalia_anual_porcentaje: z.number().describe('Plusvalía anual estimada (ej: 4.0 para 4%)'),
     reajuste_arriendo_anual: z.number().describe('Reajuste anual del arriendo (ej: 3.5 para 3.5%)').optional(),
     horizonte_anos: z.number().describe('Horizonte de evaluación en años (ej: 10)'),
     uf_value_clp: z.number().describe('Valor actual de la UF en CLP').optional(),
   }),
-  execute: async ({ arriendo_mensual_clp, precio_compra_uf, pie_porcentaje, tasa_hipotecaria_anual, plusvalia_anual_porcentaje, reajuste_arriendo_anual, horizonte_anos, uf_value_clp }) => {
+  execute: async ({ arriendo_mensual_clp, precio_compra_uf, pie_porcentaje, tasa_hipotecaria_anual, plazo_credito_anos, plusvalia_anual_porcentaje, reajuste_arriendo_anual, horizonte_anos, uf_value_clp }: any) => {
     const uf = uf_value_clp || 38500;
     const reajuste = (reajuste_arriendo_anual || 3.5) / 100;
     const plusvalia = plusvalia_anual_porcentaje / 100;
@@ -172,7 +159,7 @@ export const compareRentVsBuyTool = new FunctionTool({
     const pie_uf = precio_compra_uf * (pie_porcentaje / 100);
     const monto_credito = precio_compra_uf - pie_uf;
     const tasa_mensual = (tasa_hipotecaria_anual / 100) / 12;
-    const n_cuotas = 25 * 12; // 25 años estándar
+    const n_cuotas = plazo_credito_anos * 12;
     
     const dividendo_uf = monto_credito * 
       (tasa_mensual * Math.pow(1 + tasa_mensual, n_cuotas)) / 
@@ -227,7 +214,45 @@ export const compareRentVsBuyTool = new FunctionTool({
       veredicto: diferencia_gasto > 0 
         ? `✅ Comprar ahorra $${diferencia_gasto.toLocaleString('es-CL')} CLP en gastos a ${horizonte_anos} años, MÁS generas ${ultimo.equity_uf} UF en patrimonio.`
         : `⚠️ Comprar cuesta $${Math.abs(diferencia_gasto).toLocaleString('es-CL')} CLP más en gastos a ${horizonte_anos} años, PERO generas ${ultimo.equity_uf} UF en patrimonio.`,
-      resumen_por_ano: analisis_por_ano.filter(a => [1, 3, 5, 10, 15, 20].includes(a.ano)),
+    };
+  }
+});
+
+/**
+ * Calcula el costo de oportunidad y retorno compuesto
+ */
+export const opportunityCostTool = new FunctionTool({
+  name: 'calculate_opportunity_cost',
+  description: `Calcula el costo de oportunidad de invertir el pie (down payment) en un instrumento financiero 
+  (ej. depósito a plazo, fondo mutuo, S&P 500) en lugar de usarlo para comprar la propiedad.`,
+  parameters: z.object({
+    monto_inicial_uf: z.number().describe('Monto inicial a invertir en UF (usualmente el pie de la propiedad)'),
+    tasa_retorno_anual_porcentaje: z.number().describe('Tasa de retorno anual esperada (ej: 5.0 para 5%)'),
+    horizonte_anos: z.number().describe('Horizonte de evaluación en años'),
+    uf_value_clp: z.number().describe('Valor actual de la UF en CLP').optional(),
+  }),
+  execute: async ({ monto_inicial_uf, tasa_retorno_anual_porcentaje, horizonte_anos, uf_value_clp }: any) => {
+    const uf = uf_value_clp || 38500;
+    const tasa = tasa_retorno_anual_porcentaje / 100;
+    
+    // Interés compuesto: A = P(1 + r)^t
+    const monto_final_uf = monto_inicial_uf * Math.pow(1 + tasa, horizonte_anos);
+    const ganancia_uf = monto_final_uf - monto_inicial_uf;
+
+    return {
+      status: 'success',
+      parametros: {
+        inversion_inicial: `${monto_inicial_uf.toFixed(1)} UF ($${Math.round(monto_inicial_uf * uf).toLocaleString('es-CL')} CLP)`,
+        tasa_retorno_anual: `${tasa_retorno_anual_porcentaje}%`,
+        horizonte: `${horizonte_anos} años`,
+      },
+      resultado: {
+        monto_final_uf: parseFloat(monto_final_uf.toFixed(1)),
+        ganancia_uf: parseFloat(ganancia_uf.toFixed(1)),
+        monto_final_clp: `$${Math.round(monto_final_uf * uf).toLocaleString('es-CL')} CLP`,
+        ganancia_clp: `$${Math.round(ganancia_uf * uf).toLocaleString('es-CL')} CLP`,
+      },
+      conclusion: `Si inviertes ${monto_inicial_uf.toFixed(1)} UF al ${tasa_retorno_anual_porcentaje}% anual por ${horizonte_anos} años, tendrías un total de ${monto_final_uf.toFixed(1)} UF. Tu ganancia neta sería de ${ganancia_uf.toFixed(1)} UF.`
     };
   }
 });

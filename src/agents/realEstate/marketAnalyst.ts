@@ -20,12 +20,22 @@ FUENTES PRIORITARIAS:
 - yapo.cl
 - goplaceit.com
 
-OUTPUT REQUERIDO:
-- Lista de 5-10 propiedades comparables con precio y UF/m²
-- Precio promedio UF/m² de la zona
-- Evaluación: ¿El precio ofrecido es justo, alto o bajo?
-- Rango de precio esperado para esta propiedad
+PASO OBLIGATORIO FINAL:
+Después de calcular el precio_promedio_uf_m2, DEBES multiplicarlo por la superficie en m² de la propiedad evaluada para obtener el precio_estimado_propiedad_uf. 
+Ejemplo: si el promedio es 90 UF/m² y la propiedad tiene 60 m², entonces precio_estimado_propiedad_uf = 5400.
 
-Siempre responde en español chileno. Cita las fuentes de los datos.`,
+OUTPUT REQUERIDO (DEBE SER ESTRICTAMENTE UN OBJETO JSON VÁLIDO):
+{
+  "comparables": [{ "propiedad": "string", "precio": "string", "uf_m2": "number" }],
+  "precio_promedio_uf_m2": "number",
+  "superficie_m2_evaluada": "number",
+  "precio_estimado_propiedad_uf": "number (precio_promedio_uf_m2 × superficie_m2)",
+  "evaluacion_precio": "string",
+  "rango_negociacion_uf": { "minimo": "number", "maximo": "number" },
+  "fuentes": ["string"]
+}
+
+Siempre responde en español chileno y devuelve ÚNICAMENTE un objeto JSON estructurado válido.
+RESTRICCIÓN MUY IMPORTANTE (NEGATIVE PROMPT): Bajo ninguna circunstancia realices análisis de rentabilidad, proyecciones financieras, rentabilidades futuras ni evaluaciones hipotecarias. Tu alcance se limita estricta y únicamente a evaluar comparables de mercado actual y precios de venta.`,
   tools: [GOOGLE_SEARCH],
 });

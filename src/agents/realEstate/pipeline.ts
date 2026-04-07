@@ -11,8 +11,8 @@ import { synthesizer } from './synthesizer';
  */
 export const parallelAnalysis = new ParallelAgent({
   name: 'ParallelAnalysis',
-  description: 'Ejecuta 4 análisis en paralelo: mercado, plusvalía, financiero y barrio.',
-  subAgents: [marketAnalyst, plusvaliaAnalyst, financialAnalyst, neighborhoodAnalyst],
+  description: 'Ejecuta 3 análisis en paralelo: mercado, plusvalía y barrio.',
+  subAgents: [marketAnalyst, plusvaliaAnalyst, neighborhoodAnalyst],
 });
 
 /**
@@ -20,6 +20,6 @@ export const parallelAnalysis = new ParallelAgent({
  */
 export const evaluationPipeline = new SequentialAgent({
   name: 'EvaluationPipeline',
-  description: 'Pipeline completo de evaluación inmobiliaria. Ejecuta 4 análisis en paralelo y luego sintetiza en un informe ejecutivo con recomendación.',
-  subAgents: [parallelAnalysis, synthesizer],
+  description: 'Pipeline completo de evaluación inmobiliaria. Ejecuta análisis paralelo, seguido de análisis financiero de los resultados y luego sintetiza en un informe ejecutivo con recomendación.',
+  subAgents: [parallelAnalysis, financialAnalyst, synthesizer],
 });
